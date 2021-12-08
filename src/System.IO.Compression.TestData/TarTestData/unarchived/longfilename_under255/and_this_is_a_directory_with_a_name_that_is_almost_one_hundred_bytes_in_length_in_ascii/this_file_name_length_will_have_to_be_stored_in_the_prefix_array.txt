@@ -1,0 +1,4 @@
+folder name is 88 characters in length.
+file name is 70 characters in length.
+so the folder name should get saved in the name array, with a separator.
+but the file name should get saved in the prefix array.
