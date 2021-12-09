@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.Build.NoTargets">
     <PropertyGroup>
         <NoWarn>$(NoWarn);NU5123</NoWarn>
+        <DefaultItemExcludes>$(DefaultItemExcludes);TarTestData/GenerateTarFiles.sh</DefaultItemExcludes>
     </PropertyGroup>
 </Project>
