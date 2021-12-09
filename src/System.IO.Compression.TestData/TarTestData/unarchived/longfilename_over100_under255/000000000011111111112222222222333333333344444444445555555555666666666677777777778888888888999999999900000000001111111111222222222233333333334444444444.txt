@@ -1,0 +1,4 @@
+This filename is 154 ASCII characters in length.
+The name array has a length of 100 bytes.
+The prefix array has a length of 155 bytes.
+Neither v7 nor ustar support can handle this filename length.

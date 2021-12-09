@@ -1,7 +1,0 @@
-the directory name has a length of 254 characters, it can still fit a nullchar at the end
-the name array has a length of 100 bytes
-the prefix array has a length of 155 bytes
-but the filename has a length of 48 characters, so it will not fit
-the maximum filename length in unix is 255 characters
-to test the maximum total characters to fit in the two arrays,
-it's necessary to consider the full path length
