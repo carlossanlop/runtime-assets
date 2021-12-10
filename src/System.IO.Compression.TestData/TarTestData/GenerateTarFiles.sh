@@ -5,11 +5,11 @@
 # and saves them in additional new folders under 'TarTestData', one folder for each compression method.
 # The user executing this script must be part of the sudo group.
 
-# The tests should verify these preselected uname, gname, uid and gid
-tarUser="dotnet"
-tarGroup="devdiv"
-userId=7913
-groupId=3579
+# The tests should verify these preselected permission and ownership values
+TarUser="dotnet"
+TarGroup="devdiv"
+UserId=7913
+GroupId=3579
 
 # These DevMajor and DevMinor numbers have no meaning, but those are the
 # numbers that the tests should look for when reading device files.
@@ -22,11 +22,11 @@ BlockDevMinor=53
 
 function Echo()
 {
-    color=$1
-    message=$2
-    originalColor="\e[0m"
+    Color=$1
+    Message=$2
+    OriginalColor="\e[0m"
 
-    echo -e "$color$message$originalColor"
+    echo -e "$Color$Message$OriginalColor"
 }
 
 function EchoError()
@@ -59,7 +59,7 @@ function CheckLastErrorOrExit()
 
     if [ $? -ne 0 ]; then
         EchoError "$errorMessage"
-        EchoError "Exiting."
+        EchoError "Script failed to finish."
         exit 1
     else
         EchoSuccess "Success!"
@@ -82,7 +82,7 @@ function DeleteAndRecreateDir()
 
     if [ -d $Dir ]; then
         EchoWarning "Deleting folder: $Dir"
-        rm -r $Dir
+        sudo rm -r $Dir
     fi
 
     EchoWarning "Creating folder: $Dir"
@@ -104,21 +104,27 @@ function ExecuteTar()
     EchoInfo "cd $FullPathFolderToArchive"
     cd $FullPathFolderToArchive
 
-    EchoInfo "tar $Arguments --format=$Format $FileName *"
-    tar $Arguments $FileName * --format=$Format
+    TarCommand="tar $Arguments $FileName * --format=$Format"
+    EchoInfo "$TarCommand"
+
+    # Execute the command as the user that owns the files
+    # to archive, otherwise tar fails to pack them
+    sudo $TarCommand
 
     if [ $? -ne 0 ]; then
-        EchoError "Failed!"
-        EchoError "Deleting '$FileName'."
-        rm $FileName
+        EchoError "Tar command failed!"
+        if [ -f $FileName ]; then
+            EchoError "Deleting malformed file: $FileName"
+            sudo rm $FileName
+        fi
     else
-        EchoSuccess "Success!"
+        EchoSuccess "Tar archive created successfully!"
     fi
 
     EchoSuccess "----------------------------------------------"
 }
 
-function GenerateFile()
+function GenerateArchive()
 {
     DirsRoot=$1
     TargetDir=$2
@@ -143,19 +149,23 @@ function GenerateFile()
 
         done
     done
+
+    # Tar was executed elevated, need to ensure the
+    # generated archives are readable by current user
+    ResetOwnership $TargetDir
 }
 
-function GenerateTarFiles()
+function GenerateTarArchives()
 {
     DirsRoot=$1
     TargetDir=$2
     CompressionMethod=$3
 
     if [ $CompressionMethod = "tar" ]; then
-        GenerateFile $DirsRoot $TargetDir "cvf" ".tar"
+        GenerateArchive $DirsRoot $TargetDir "cvf" ".tar"
 
     elif [ $CompressionMethod = "targz" ]; then
-        GenerateFile $DirsRoot $TargetDir "cvzf" ".tar.gz"
+        GenerateArchive $DirsRoot $TargetDir "cvzf" ".tar.gz"
 
     else
         EchoError "Unsupported compression method: $CompressionMethod"
@@ -167,15 +177,17 @@ function GenerateCompressionMethodDir()
 {
     DirsRoot=$1
     CompressionMethod=$2
+
     TargetDir="$DirsRoot/$CompressionMethod"
     DeleteAndRecreateDir $TargetDir
 
-    GenerateTarFiles "$DirsRoot" "$TargetDir" "$CompressionMethod"
+    GenerateTarArchives "$DirsRoot" "$TargetDir" "$CompressionMethod"
 }
 
 function GenerateCompressionMethodDirs()
 {
     DirsRoot=$1
+
     CompressionMethodsArray=( "tar" "targz" )
 
     for CompressionMethod in "${CompressionMethodsArray[@]}"; do
@@ -185,55 +197,104 @@ function GenerateCompressionMethodDirs()
 
 function ConfirmUserAndGroupExist()
 {
-    EchoWarning "Checking if user '$tarUser' and group '$tarGroup' exist..."
+    EchoWarning "Checking if user '$TarUser' and group '$TarGroup' exist..."
 
-    if [ $(getent group $tarGroup) ]; then
-        EchoSuccess "Group '$tarGroup' exists. No action taken."
-
-    else
-        EchoWarning "Group '$tarGroup' does not exist. Adding it."
-        sudo groupadd $tarGroup
-        EchoWarning "Changing id of '$tarGroup' to $groupId"
-        sudo groupmod -g $groupId $tarGroup
-    fi
-
-    if id $tarUser &>/dev/null; then
-        EchoSuccess "User '$tarUser' exists. No action taken."
+    if [ $(getent group $TarGroup) ]; then
+        EchoSuccess "Group '$TarGroup' exists. No action taken."
 
     else
-        EchoWarning "User '$tarUser' does not exist. Adding it."
-        sudo useradd $tarUser
-        EchoWarning "Changing id of '$tarUser' to $userId"
-        sudo usermod -u $userId $tarUser
-        EchoWarning "Adding new '$tarUser' user to new '$tarGroup' group."
-        sudo usermod -a -G $tarGroup $tarUser
-        EchoWarning "Setting password for new '$tarUser' user."
-        sudo passwd $tarUser
+        EchoWarning "Group '$TarGroup' does not exist. Adding it."
+        sudo groupadd $TarGroup
+        EchoWarning "Changing id of '$TarGroup' to $GroupId"
+        sudo groupmod -g $GroupId $TarGroup
     fi
+
+    if id $TarUser &>/dev/null; then
+        EchoSuccess "User '$TarUser' exists. No action taken."
+
+    else
+        EchoWarning "User '$TarUser' does not exist. Adding it."
+        sudo useradd $TarUser
+        EchoWarning "Changing id of '$TarUser' to $UserId"
+        sudo usermod -u $UserId $TarUser
+        EchoWarning "Adding new '$TarUser' user to new '$TarGroup' group."
+        sudo usermod -a -G $TarGroup $TarUser
+        EchoWarning "Setting password for new '$TarUser' user."
+        sudo passwd $TarUser
+    fi
+}
+
+function ResetOwnership()
+{
+    Folder=$1
+
+    CurrentUser=$(id -u)
+    CurrentGroup=$(id -g)
+
+    EchoWarning "Resetting ownership of folder to '$CurrentUser:$CurrentGroup': $Folder"
+    sudo chown -R $CurrentUser:$CurrentGroup "$Folder"
+
+    CheckLastErrorOrExit "Failed to reset ownership of folder to '$CurrentUser:$CurrentGroup': $Folder"
 }
 
 function ChangeUnarchivedOwnership()
 {
     DirsRoot=$1
 
-    EchoWarning "Changing ownership of contents of 'unarchived' folder to '$tarUser:$tarGroup'."
-    sudo chown -R $tarUser:$tarGroup $DirsRoot/unarchived/*
-    CheckLastErrorOrExit "Changing ownership of 'unarchived' folder failed."
+    CurrentUser=$(id -u)
+    CurrentGroup=$(id -g)
+    UnarchivedDir=$DirsRoot/unarchived
+    UnarchivedDirContents=$UnarchivedDir/*
+    UnarchivedChildrenArray=($(ls $UnarchivedDir))
+
+    # First, we recursively change ownership of all files and folders
+    EchoWarning "Changing ownership of contents of 'unarchived' folder to '$TarUser:$TarGroup'."
+    sudo chown -R $TarUser:$TarGroup $UnarchivedDirContents
+    CheckLastErrorOrExit "Failed to change ownership of 'unarchived' folder contents."
+
+    # Second, we revert the ownership of the parent folders (no recursion).
+    # This is so we can later 'cd' into them. This is a requirement for the 'tar' command
+    # so that it archives entries relative to that folder.
+    for UnarchivedChildDir in "${UnarchivedChildrenArray[@]}"; do
+        EchoWarning "Preserving ownership of child folder: $UnarchivedChildDir"
+        sudo chown $CurrentUser:$CurrentGroup $UnarchivedDir/$UnarchivedChildDir
+        CheckLastErrorOrExit "Failed to change ownership of: $UnarchivedChildDir"
+    done
 }
 
 function ResetUnarchivedOwnership()
 {
     DirsRoot=$1
-    currentUser=$(id -u)
-    currentGroup=$(id -g)
 
-    EchoWarning "Resetting ownership of contents of 'unarchived' folder to '$currentUser:$currentGroup'."
-    sudo chown -R $currentUser:$currentGroup $DirsRoot/unarchived/*
+    ResetOwnership "$DirsRoot/unarchived/*"
+}
+
+function ChangeUnarchivedMode()
+{
+    DirsRoot=$1
+
+    EchoWarning "Setting 744 (rwx,r,r) permissions to contents of 'unarchived' folder."
+
+    UnarchivedDirContents=$DirsRoot/unarchived/*
+
+    # 744
+    sudo chmod -R a=r $UnarchivedDirContents
+    CheckLastErrorOrExit "Chmod a=r failed for $UnarchivedDirContents"
+
+    sudo chmod -R u+wx $UnarchivedDirContents
+    CheckLastErrorOrExit "Chmod u+wx failed for $UnarchivedDirContents"
+
+    sudo chmod -R g-wx $UnarchivedDirContents
+    CheckLastErrorOrExit "Chmod g-wx failed for $UnarchivedDirContents"
+
+    sudo chmod -R o-wx $UnarchivedDirContents
+    CheckLastErrorOrExit "Chmod o-wx failed for $UnarchivedDirContents"
 }
 
 function CreateDeviceFiles()
 {
     DirsRoot=$1
+
     DevicesDir=$DirsRoot/unarchived/devices
     CharacterDevice=$DevicesDir/chardev
     BlockDevice=$DevicesDir/blockdev
@@ -273,11 +334,12 @@ function BeginGeneration()
     DirsRoot=$1
     ConfirmUserAndGroupExist
     ConfirmDirExists $DirsRoot
+    ChangeUnarchivedMode $DirsRoot
     ChangeUnarchivedOwnership $DirsRoot
     CreateDeviceFiles $DirsRoot
     GenerateCompressionMethodDirs $DirsRoot
     ResetUnarchivedOwnership $DirsRoot
-
+    EchoSuccess "Script finished successfully!"
 }
 
 ### SCRIPT EXECUTION ###
