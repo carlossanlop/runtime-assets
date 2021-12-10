@@ -218,6 +218,14 @@ function CreateDeviceFiles()
     CharacterDevice=$DevicesDir/chardev
     BlockDevice=$DevicesDir/blockdev
 
+    # These DevMajor and DevMinor numbers have no meaning,
+    # but those are the numbers that the tests should look for.
+    # The only tar version that does not support archiving devices is v7.
+    CharDevMajor=49
+    CharDevMinor=86
+    BlockDevMajor=71
+    BlockDevMinor=53
+
     currentUser=$(id -u)
     currentGroup=$(id -g)
 
@@ -229,15 +237,11 @@ function CreateDeviceFiles()
         mkdir $DevicesDir
     fi
 
-    # The selected DevMajor and DevMinor numbers have no meaning,
-    # but those are the numbers that the tests should look for.
-    # The only tar version that does not support archiving devices is v7.
-
     if [ -f $CharacterDevice ]; then
         EchoSuccess "Character device exists. No action taken."
     else
         EchoWarning "Character device does not exist. Creating it: $CharacterDevice"
-        sudo mknod $CharacterDevice c 49 86
+        sudo mknod $CharacterDevice c $CharDevMajor $CharDevMinor
         sudo chown $currentUser:$currentGroup $CharacterDevice
     fi
 
@@ -245,7 +249,7 @@ function CreateDeviceFiles()
         EchoSuccess "Block device exists. No action taken."
     else
         EchoWarning "Block device does not exist. Creating it: $BlockDevice"
-        sudo mknod $BlockDevice b 71 53
+        sudo mknod $BlockDevice b $BlockDevMajor $BlockDevMinor
         sudo chown $currentUser:$currentGroup $BlockDevice
     fi
 }
