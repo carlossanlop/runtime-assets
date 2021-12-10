@@ -5,6 +5,19 @@
 # and saves them in additional new folders under 'TarTestData', one folder for each compression method.
 # The user executing this script must be part of the sudo group.
 
+# The tests should verify these preselected uname, gname, uid and gid
+tarUser="dotnet"
+tarGroup="devdiv"
+userId=7913
+groupId=3579
+
+# These DevMajor and DevMinor numbers have no meaning, but those are the
+# numbers that the tests should look for when reading device files.
+CharDevMajor=49
+CharDevMinor=86
+BlockDevMajor=71
+BlockDevMinor=53
+
 ### FUNCTIONS ###
 
 function Echo()
@@ -40,6 +53,19 @@ function EchoInfo()
     Echo $cyan "$1"
 }
 
+function CheckLastErrorOrExit()
+{
+    errorMessage=$1
+
+    if [ $? -ne 0 ]; then
+        EchoError "$errorMessage"
+        EchoError "Exiting."
+        exit 1
+    else
+        EchoSuccess "Success!"
+    fi
+}
+
 function ConfirmDirExists()
 {
     Dir=$1
@@ -55,11 +81,11 @@ function DeleteAndRecreateDir()
     Dir=$1
 
     if [ -d $Dir ]; then
-        EchoWarning "Deleting directory: $Dir"
+        EchoWarning "Deleting folder: $Dir"
         rm -r $Dir
     fi
 
-    EchoWarning "Creating directory: $Dir"
+    EchoWarning "Creating folder: $Dir"
     mkdir $Dir
 
     ConfirmDirExists $Dir
@@ -159,13 +185,6 @@ function GenerateCompressionMethodDirs()
 
 function ConfirmUserAndGroupExist()
 {
-    # The tests should verify these preselected uname, gname, uid and gid
-    tarUser="dotnet"
-    tarGroup="devdiv"
-
-    userId=7913
-    groupId=3579
-
     EchoWarning "Checking if user '$tarUser' and group '$tarGroup' exist..."
 
     if [ $(getent group $tarGroup) ]; then
@@ -197,8 +216,9 @@ function ChangeUnarchivedOwnership()
 {
     DirsRoot=$1
 
-    EchoWarning "Changing ownership of contents of 'unarchived' folder to 'dotnet:devdiv'."
-    sudo chown -R dotnet:devdiv $DirsRoot/unarchived/*
+    EchoWarning "Changing ownership of contents of 'unarchived' folder to '$tarUser:$tarGroup'."
+    sudo chown -R $tarUser:$tarGroup $DirsRoot/unarchived/*
+    CheckLastErrorOrExit "Changing ownership of 'unarchived' folder failed."
 }
 
 function ResetUnarchivedOwnership()
@@ -218,39 +238,33 @@ function CreateDeviceFiles()
     CharacterDevice=$DevicesDir/chardev
     BlockDevice=$DevicesDir/blockdev
 
-    # These DevMajor and DevMinor numbers have no meaning,
-    # but those are the numbers that the tests should look for.
-    # The only tar version that does not support archiving devices is v7.
-    CharDevMajor=49
-    CharDevMinor=86
-    BlockDevMajor=71
-    BlockDevMinor=53
-
     currentUser=$(id -u)
     currentGroup=$(id -g)
 
     if [ -d $DevicesDir ]; then
-        EchoSuccess "Devices directory exists. No action taken."
+        EchoSuccess "Devices folder exists. No action taken."
     else
         # Empty directories can't get added to git
-        EchoWarning "Devices directory does not exist. Creating it: $DevicesDir"
+        EchoWarning "Devices folder does not exist. Creating it: $DevicesDir"
         mkdir $DevicesDir
     fi
 
-    if [ -f $CharacterDevice ]; then
+    if [ -c $CharacterDevice ]; then
         EchoSuccess "Character device exists. No action taken."
     else
         EchoWarning "Character device does not exist. Creating it: $CharacterDevice"
         sudo mknod $CharacterDevice c $CharDevMajor $CharDevMinor
         sudo chown $currentUser:$currentGroup $CharacterDevice
+        CheckLastErrorOrExit "Changing ownership on character device failed."
     fi
 
-    if [ -f $BlockDevice ]; then
+    if [ -b $BlockDevice ]; then
         EchoSuccess "Block device exists. No action taken."
     else
         EchoWarning "Block device does not exist. Creating it: $BlockDevice"
         sudo mknod $BlockDevice b $BlockDevMajor $BlockDevMinor
         sudo chown $currentUser:$currentGroup $BlockDevice
+        CheckLastErrorOrExit "Changing ownership on block device failed."
     fi
 }
 
