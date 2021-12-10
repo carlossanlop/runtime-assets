@@ -3,6 +3,7 @@
 # Script that generates tar files for the contents of all the folders located inside the folder
 # runtime-assets/src/System.IO.Compression.TestData/TarTestData/unarchived/
 # and saves them in additional new folders under 'TarTestData', one folder for each compression method.
+# The user executing this script must be part of the sudo group.
 
 ### FUNCTIONS ###
 
@@ -158,8 +159,12 @@ function GenerateCompressionMethodDirs()
 
 function ConfirmUserAndGroupExist()
 {
+    # The tests should verify these preselected uname, gname, uid and gid
     tarUser="dotnet"
     tarGroup="devdiv"
+
+    userId=7913
+    groupId=3579
 
     EchoWarning "Checking if user '$tarUser' and group '$tarGroup' exist..."
 
@@ -169,6 +174,8 @@ function ConfirmUserAndGroupExist()
     else
         EchoWarning "Group '$tarGroup' does not exist. Adding it."
         sudo groupadd $tarGroup
+        EchoWarning "Changing id of '$tarGroup' to $groupId"
+        sudo groupmod -g $groupId $tarGroup
     fi
 
     if id $tarUser &>/dev/null; then
@@ -177,6 +184,8 @@ function ConfirmUserAndGroupExist()
     else
         EchoWarning "User '$tarUser' does not exist. Adding it."
         sudo useradd $tarUser
+        EchoWarning "Changing id of '$tarUser' to $userId"
+        sudo usermod -u $userId $tarUser
         EchoWarning "Adding new '$tarUser' user to new '$tarGroup' group."
         sudo usermod -a -G $tarGroup $tarUser
         EchoWarning "Setting password for new '$tarUser' user."
@@ -202,12 +211,52 @@ function ResetUnarchivedOwnership()
     sudo chown -R $currentUser:$currentGroup $DirsRoot/unarchived/*
 }
 
+function CreateDeviceFiles()
+{
+    DirsRoot=$1
+    DevicesDir=$DirsRoot/unarchived/devices
+    CharacterDevice=$DevicesDir/chardev
+    BlockDevice=$DevicesDir/blockdev
+
+    currentUser=$(id -u)
+    currentGroup=$(id -g)
+
+    if [ -d $DevicesDir ]; then
+        EchoSuccess "Devices directory exists. No action taken."
+    else
+        # Empty directories can't get added to git
+        EchoWarning "Devices directory does not exist. Creating it: $DevicesDir"
+        mkdir $DevicesDir
+    fi
+
+    # The selected DevMajor and DevMinor numbers have no meaning,
+    # but those are the numbers that the tests should look for.
+    # The only tar version that does not support archiving devices is v7.
+
+    if [ -f $CharacterDevice ]; then
+        EchoSuccess "Character device exists. No action taken."
+    else
+        EchoWarning "Character device does not exist. Creating it: $CharacterDevice"
+        sudo mknod $CharacterDevice c 49 86
+        sudo chown $currentUser:$currentGroup $CharacterDevice
+    fi
+
+    if [ -f $BlockDevice ]; then
+        EchoSuccess "Block device exists. No action taken."
+    else
+        EchoWarning "Block device does not exist. Creating it: $BlockDevice"
+        sudo mknod $BlockDevice b 71 53
+        sudo chown $currentUser:$currentGroup $BlockDevice
+    fi
+}
+
 function BeginGeneration()
 {
     DirsRoot=$1
     ConfirmUserAndGroupExist
     ConfirmDirExists $DirsRoot
     ChangeUnarchivedOwnership $DirsRoot
+    CreateDeviceFiles $DirsRoot
     GenerateCompressionMethodDirs $DirsRoot
     ResetUnarchivedOwnership $DirsRoot
 
