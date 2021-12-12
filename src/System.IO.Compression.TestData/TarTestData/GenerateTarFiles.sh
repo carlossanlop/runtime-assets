@@ -18,6 +18,19 @@ CharDevMinor=86
 BlockDevMajor=71
 BlockDevMinor=53
 
+# For PAX, we generate an additional file that contains an initial entry with the TypeFlag=g
+# Indicating it's a global extended attributes entry. This entry defines attributes that apply
+# to all the other entries
+PaxGEA_GName="globalpaxgroup"
+PaxGEA_UName="globalpaxuser"
+PaxGEA_UserId=8282
+PaxGEA_GroupId=9191
+PaxGEA_ATime=2929
+PaxGEA_CTime=4747
+PaxGEA_MTime=3838
+
+PaxGlobalExtendedAttributes="--pax-option=exthdr.name:=%d/CustomHeader/%f,gname:=$PaxGEA_GName,gid:=$PaxGEA_GroupId,uname:=$PaxGEA_UName,uid:=$PaxGEA_UserId,atime:=$PaxGEA_ATime,ctime:=$PaxGEA_CTime,mtime:=$PaxGEA_MTime"
+
 ### FUNCTIONS ###
 
 function Echo()
@@ -97,14 +110,19 @@ function ExecuteTar()
     Arguments=$2
     Filename=$3
     Format=$4
+    GlobalExtAttr=$5
 
     EchoSuccess "----------------------------------------------"
+
+    if [ ! -z $GlobalExtAttr ]; then
+        EchoWarning "Special Global Extended Attributes file $FileName"
+    fi
 
     # IMPORTANT: This will ensure we archive entries that have relative paths to this folder
     EchoInfo "cd $FullPathFolderToArchive"
     cd $FullPathFolderToArchive
 
-    TarCommand="tar $Arguments $FileName * --format=$Format"
+    TarCommand="tar $Arguments $FileName * --format=$Format $GlobalExtAttr"
     EchoInfo "$TarCommand"
 
     # Execute the command as the user that owns the files
@@ -145,7 +163,14 @@ function GenerateArchive()
             FullPathFolderToArchive="$UnarchivedDir/$FolderToArchive/"
             FileName="$OutputDir/$FolderToArchive$Extension"
 
-            ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "$Format"
+            ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "$Format" ""
+
+            if [ $Format == "pax" ]; then
+                # Special case: Generate an additional pax file with global attributes
+                # https://www.gnu.org/software/tar/manual/html_node/PAX-keywords.html#PAX-keywords
+                FileName="$OutputDir/${FolderToArchive}_global${Extension}"
+                ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "pax" "$PaxGlobalExtendedAttributes"
+            fi
 
         done
     done
