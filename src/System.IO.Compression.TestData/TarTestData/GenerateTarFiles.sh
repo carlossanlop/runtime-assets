@@ -21,7 +21,9 @@ BlockDevMinor=53
 # pax_gea is a special case for the pax format that includes global extended attributes
 FormatsArray=( "v7" "ustar" "pax" "pax_gea" "oldgnu" "gnu")
 
-GEAPAXOptions="--pax-option=globexthdr.MyGlobalExtendedAttribute=hello"
+GEAKey="globexthdr.MyGlobalExtendedAttribute"
+GEAValue="hello"
+GEAPAXOptions="--pax-option=$GEAKey=$GEAValue"
 
 ### FUNCTIONS ###
 
