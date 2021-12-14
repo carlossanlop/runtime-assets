@@ -8,8 +8,8 @@
 # The tests should verify these preselected permission and ownership values
 TarUser="dotnet"
 TarGroup="devdiv"
-UserId=7913
-GroupId=3579
+TarUserId=7913
+TarGroupId=3579
 
 # These DevMajor and DevMinor numbers have no meaning, but those are the
 # numbers that the tests should look for when reading device files.
@@ -19,6 +19,8 @@ BlockDevMajor=71
 BlockDevMinor=53
 
 FormatsArray=( "v7" "ustar" "pax" "oldgnu" "gnu")
+
+GEAPAXOptions="--pax-option=globexthdr.MyGlobalExtendedAttribute=hello"
 
 ### FUNCTIONS ###
 
@@ -97,16 +99,23 @@ function ExecuteTar()
 {
     FullPathFolderToArchive=$1
     Arguments=$2
-    Filename=$3
+    FileName=$3
     Format=$4
+    WithGlobalExtendedAttributes=$5
 
     EchoSuccess "----------------------------------------------"
+
+    GEAArgument=""
+    if [ $Format = "pax" ] && [ $WithGlobalExtendedAttributes = 1 ]; then
+        EchoWarning "Creating extra pax file with extended attributes: $FileName"
+        GEAArgument="$GEAPAXOptions"
+    fi
 
     # IMPORTANT: This will ensure we archive entries that have relative paths to this folder
     EchoInfo "cd $FullPathFolderToArchive"
     cd $FullPathFolderToArchive
 
-    TarCommand="tar $Arguments $FileName * --format=$Format"
+    TarCommand="tar $Arguments $FileName * --format=$Format $GEAArgument"
     EchoInfo "$TarCommand"
 
     # Execute the command as the user that owns the files
@@ -120,7 +129,7 @@ function ExecuteTar()
             sudo rm $FileName
         fi
     else
-        EchoSuccess "Tar archive created successfully!"
+        EchoSuccess "Tar archive created successfully: $FileName"
     fi
 
     EchoSuccess "----------------------------------------------"
@@ -146,7 +155,13 @@ function GenerateArchive()
             FullPathFolderToArchive="$UnarchivedDir/$FolderToArchive/"
             FileName="$OutputDir/$FolderToArchive$Extension"
 
-            ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "$Format"
+            ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "$Format" 0
+
+            # Special case: Generate an extra file but with a global extended attributes entry
+            if [ $Format = "pax" ]; then
+                GEAFileName="$OutputDir/${FolderToArchive}_gea_${Extension}"
+                ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$GEAFileName" "pax" 1
+            fi
 
         done
     done
@@ -206,8 +221,8 @@ function ConfirmUserAndGroupExist()
     else
         EchoWarning "Group '$TarGroup' does not exist. Adding it."
         sudo groupadd $TarGroup
-        EchoWarning "Changing id of '$TarGroup' to $GroupId"
-        sudo groupmod -g $GroupId $TarGroup
+        EchoWarning "Changing id of '$TarGroup' to $TarGroupId"
+        sudo groupmod -g $TarGroupId $TarGroup
     fi
 
     if id $TarUser &>/dev/null; then
@@ -216,8 +231,8 @@ function ConfirmUserAndGroupExist()
     else
         EchoWarning "User '$TarUser' does not exist. Adding it."
         sudo useradd $TarUser
-        EchoWarning "Changing id of '$TarUser' to $UserId"
-        sudo usermod -u $UserId $TarUser
+        EchoWarning "Changing id of '$TarUser' to $TarUserId"
+        sudo usermod -u $TarUserId $TarUser
         EchoWarning "Adding new '$TarUser' user to new '$TarGroup' group."
         sudo usermod -a -G $TarGroup $TarUser
         EchoWarning "Setting password for new '$TarUser' user."
