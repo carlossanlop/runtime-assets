@@ -18,7 +18,8 @@ CharDevMinor=86
 BlockDevMajor=71
 BlockDevMinor=53
 
-FormatsArray=( "v7" "ustar" "pax" "oldgnu" "gnu")
+# pax_gea is a special case for the pax format that includes global extended attributes
+FormatsArray=( "v7" "ustar" "pax" "pax_gea" "oldgnu" "gnu")
 
 GEAPAXOptions="--pax-option=globexthdr.MyGlobalExtendedAttribute=hello"
 
@@ -101,13 +102,15 @@ function ExecuteTar()
     Arguments=$2
     FileName=$3
     Format=$4
-    WithGlobalExtendedAttributes=$5
+    WithGEA=$5
 
     EchoSuccess "----------------------------------------------"
 
     GEAArgument=""
-    if [ $Format = "pax" ] && [ $WithGlobalExtendedAttributes = 1 ]; then
-        EchoWarning "Creating extra pax file with extended attributes: $FileName"
+    FormatArgument="$Format"
+    if [ $Format = "pax_gea" ] && [ $WithGEA = 1 ]; then
+        EchoWarning "Creating extra pax file with global a extended attributes entry"
+        FormatArgument="pax"
         GEAArgument="$GEAPAXOptions"
     fi
 
@@ -115,7 +118,7 @@ function ExecuteTar()
     EchoInfo "cd $FullPathFolderToArchive"
     cd $FullPathFolderToArchive
 
-    TarCommand="tar $Arguments $FileName * --format=$Format $GEAArgument"
+    TarCommand="tar $Arguments $FileName * --format=$FormatArgument $GEAArgument"
     EchoInfo "$TarCommand"
 
     # Execute the command as the user that owns the files
@@ -155,13 +158,12 @@ function GenerateArchive()
             FullPathFolderToArchive="$UnarchivedDir/$FolderToArchive/"
             FileName="$OutputDir/$FolderToArchive$Extension"
 
-            ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "$Format" 0
-
-            # Special case: Generate an extra file but with a global extended attributes entry
-            if [ $Format = "pax" ]; then
-                GEAFileName="$OutputDir/${FolderToArchive}_gea_${Extension}"
-                ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$GEAFileName" "pax" 1
+            WithGEA=0
+            if [ $Format = "pax_gea" ]; then
+                WithGEA=1
             fi
+
+            ExecuteTar "$FullPathFolderToArchive" "$Arguments" "$FileName" "$Format" $WithGEA
 
         done
     done
