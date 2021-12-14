@@ -1,6 +1,1 @@
-The directory name has a length of 255 characters.
-The filename has a length of 255 characters.
-The name array has a length of 100 bytes.
-The prefix array has a length of 155 bytes.
-They won't fit in the two arrays even if they are split.
-Only pax and gnu support these long paths.
+Hello longpath_over255

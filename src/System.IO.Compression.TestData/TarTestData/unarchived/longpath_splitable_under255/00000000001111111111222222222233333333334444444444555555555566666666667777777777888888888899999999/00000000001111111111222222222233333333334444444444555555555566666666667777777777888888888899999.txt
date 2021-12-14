@@ -1,7 +1,1 @@
-The directory is exactly 98 ASCII characters in length (for separator and nullchar).
-This filename is exactly 99 ASCII characters in length (for nullchar).
-The name array has a length of 100 bytes.
-The prefix array has a length of 155 bytes.
-v7 cannot handle this, but ustar should.
-
-
+Hello longpath_splitable_under255
