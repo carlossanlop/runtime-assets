@@ -204,7 +204,7 @@ function GenerateCompressionMethodDir()
     GenerateTarArchives "$DirsRoot" "$TargetDir" "$CompressionMethod"
 }
 
-function GenerateCompressionMethodDirs()
+function Generate()
 {
     DirsRoot=$1
 
@@ -361,16 +361,45 @@ function CreateSpecialFiles()
     fi
 }
 
+function ResetUnsupportedFiles()
+{
+    DirsRoot=$1
+
+    TestDir="$DirsRoot/unarchived/file_longsymlink"
+    SymlinkPath="$TestDir/link.txt"
+    TargetPath="000000000011111111112222222222333333333344444444445555555555666666666677777777778888888888999999999900000000001111111111222222222233333333334444444444555555555566666666667777777777888888888899999999990000000000111111111122222222223333333333444444444455555/00000000001111111111222222222233333333334444444444555555555566666666667777777777888888888899999999990000000000111111111122222222223333333333444444444455555555556666666666777777777788888888889999999999000000000011111111112222222222333333333344444444445.txt"
+
+    if [ ! -L $SymlinkPath ]; then
+        EchoWarning "Restoring link that nupkg does not support: $SymlinkPath"
+        ln -s $TargetPath $SymlinkPath
+    fi
+}
+
+function RemoveUnsupportedFiles()
+{
+    DirsRoot=$1
+
+    TestDir="$DirsRoot/unarchived/file_longsymlink"
+    SymlinkPath="$TestDir/link.txt"
+
+    if [ -L $SymlinkPath ]; then
+        EchoWarning "Deleting link that nupkg does not support: $SymlinkPath"
+        rm $SymlinkPath
+    fi
+}
+
 function BeginGeneration()
 {
     DirsRoot=$1
     ConfirmUserAndGroupExist
     ConfirmDirExists $DirsRoot
+    ResetUnsupportedFiles $DirsRoot
     ChangeUnarchivedMode $DirsRoot
     ChangeUnarchivedOwnership $DirsRoot
     CreateSpecialFiles $DirsRoot
-    GenerateCompressionMethodDirs $DirsRoot
+    Generate $DirsRoot
     ResetUnarchivedOwnership $DirsRoot
+    RemoveUnsupportedFiles $DirsRoot
     EchoSuccess "Script finished successfully!"
 }
 
